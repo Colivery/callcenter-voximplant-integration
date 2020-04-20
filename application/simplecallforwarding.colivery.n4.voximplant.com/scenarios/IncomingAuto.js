@@ -20,6 +20,12 @@ VoxEngine.addEventListener(AppEvents.CallAlerting, (e) => {
     incCall.addEventListener(CallEvents.Disconnected, VoxEngine.terminate);
     incCall.addEventListener(CallEvents.Connected, () =>{
         const request = VoxEngine.enqueueACDRequest("helpers", incCallerId);
+	// Timeout
+        let timeoutID = setTimeout(function(){
+		request.removeEventListener(ACDEvents);
+		incCall.dfonCallConnected();
+        }, timeout_dur);
+
         request.addEventListener(ACDEvents.Queued, function (a) {
             request.getStatus();
         });
@@ -32,7 +38,6 @@ VoxEngine.addEventListener(AppEvents.CallAlerting, (e) => {
         });
         
         request.addEventListener(ACDEvents.Waiting, function (a) {
-        
             incCall.say("Hello and welcome to Colivery, you will be connected with a person or a robot, who knows ");
         });
 
@@ -41,21 +46,11 @@ VoxEngine.addEventListener(AppEvents.CallAlerting, (e) => {
         });
         
         request.addEventListener(ACDEvents.OperatorReached, e => {
-            evtFired = true;
+	    clearTimeout(timeoutID);
             const out = e.operatorCall;
             VoxEngine.sendMediaBetween(incCall, out);
         });
-
-        //timeout function
-        //if no operator reached connect do dialogflow
-        var evtFired = false;
-        setTimeout(function(){
-            if(!evtFired) {
-                request.removeEventListener(ACDEvents);
-                incCall.dfonCallConnected();
-            }
-        }, timeout_dur);
-        })
+    })
 })
 
 
