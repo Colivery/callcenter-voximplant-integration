@@ -8,64 +8,93 @@
 require(Modules.AI)
 require(Modules.ACD);
 
+
 var diaglogflow, call, hangup
-var timeout_dur = 20000;
+var timeout_dur = 10000;
 
 //inbound call processing
 VoxEngine.addEventListener(AppEvents.CallAlerting, (e) => {
-    const incCall = e.call;
+    call = e.call;
     const incCallerId = e.callerid;
-    incCall.answer();
-    incCall.addEventListener(CallEvents.Failed, VoxEngine.terminate);
-    incCall.addEventListener(CallEvents.Disconnected, VoxEngine.terminate);
-    incCall.addEventListener(CallEvents.Connected, () =>{
-        const request = VoxEngine.enqueueACDRequest("helpers", incCallerId);
-	// Timeout
-        let timeoutID = setTimeout(function(){
-		request.removeEventListener(ACDEvents);
-		incCall.dfonCallConnected();
-        }, timeout_dur);
 
+    call.answer();
+    call.addEventListener(CallEvents.Failed, VoxEngine.terminate);
+    call.addEventListener(CallEvents.Disconnected, VoxEngine.terminate);
+    call.addEventListener(CallEvents.Connected, () =>{
+        const request = VoxEngine.enqueueACDRequest("helpers", incCallerId);
         request.addEventListener(ACDEvents.Queued, function (a) {
             request.getStatus();
         });
-    
+      
         request.addEventListener(ACDEvents.Offline, function (a) {
-            incCall.say("Your call can't be processed right now"); 
-            incCall.addEventListener(CallEvents.PlaybackFinished, function(b) {
+            call.say("Your call can't be processed right now"); 
+            call.addEventListener(CallEvents.PlaybackFinished, function(b) {
             VoxEngine.terminate();
             });
         });
         
         request.addEventListener(ACDEvents.Waiting, function (a) {
-            incCall.say("Hello and welcome to Colivery, you will be connected with a person or a robot, who knows ");
+        
+            
+            call.say(
+         "Hallo, wilkommen zu Machbarschaft. Sie werden gleich verbunden.",
+         {
+          "language": VoiceList.Google.de_DE_Wavenet_A,
+          "ttsOptions": {
+            "pitch": "high",
+            "volume": "loud",
+            "rate": "x-slow"
+          }
+         });
         });
 
-        incCall.addEventListener(CallEvents.PlaybackFinished, function (e) {
-            incCall.startPlayback("http://cdn.voximplant.com/toto.mp3");  
+        call.addEventListener(CallEvents.PlaybackFinished, function (e) {
+            call.startPlayback("http://cdn.voximplant.com/toto.mp3");  
         });
         
         request.addEventListener(ACDEvents.OperatorReached, e => {
-	    clearTimeout(timeoutID);
+            evtFired = true;
             const out = e.operatorCall;
-            VoxEngine.sendMediaBetween(incCall, out);
+            VoxEngine.sendMediaBetween(call, out);
         });
-    })
+
+        //timeout function
+        //if no operator reached connect do dialogflow
+        var evtFired = false;
+        setTimeout(function(){
+            if(!evtFired) {
+                request.removeEventListener(ACDEvents);
+                noOperator(incCallerId);
+            }
+        }, timeout_dur);
+        })
 })
 
+function noOperator(callerId){
+  if(callerId===""){
+    //hier könnte eine dtmf abfrage passieren
+  }
+dfonCallConnected(callerId);
+
+}
 
 
 
 //FUNCTIONS
 //Dialogflow
-function dfonCallConnected(e) {
+function dfonCallConnected(callId) {
   // Create Dialogflow object
  dialogflow = AI.createDialogflow({
    lang: DialogflowLanguage.GERMAN
  })
- dialogflow.addEventListener(AI.Events.DialogflowResponse, onDialogflowResponse)
+ dialogflow.addEventListener(AI.Events.DialogflowResponse, dfonDialogflowResponse)
     // Sending WELCOME event to let the agent says a welcome message
     dialogflow.sendQuery({event : {name: "WELCOME", language_code:"de"}})
+    dialogflow.sendQuery({context: {
+            name: "test",
+            parameters: {tet_param: "test"},
+            lifespanCount: 20
+        }})
     // Playback marker used for better user experience
     dialogflow.addMarker(0)
 
