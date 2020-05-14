@@ -1,8 +1,7 @@
-//This script is processing an incoming call
-//it will enqueue the incoming call in the "helpers"-Queue
-//if no operator is reachead within "timeout_dur" seconds or the Queue is offline,
-//the call will be redirected to a GoogleDialogflow bot
-//NOT TESTED
+// This script is processing incoming calls
+// it will enqueue the incoming call in the "helpers"-Queue.
+// If no operator is reachead within "timeout_dur" milli seconds or the Queue is offline,
+// the call will be redirected to a GoogleDialogflow bot
 
 
 require(Modules.AI)
@@ -10,7 +9,8 @@ require(Modules.ACD);
 
 
 var diaglogflow, call, hangup
-var timeout_dur = 10000;
+const timeout_dur = 10000;
+const VOICE_MEN = VoiceList.Google.de_DE_Wavenet_B;
 
 //inbound call processing
 VoxEngine.addEventListener(AppEvents.CallAlerting, (e) => {
@@ -20,33 +20,29 @@ VoxEngine.addEventListener(AppEvents.CallAlerting, (e) => {
     call.answer();
     call.addEventListener(CallEvents.Failed, VoxEngine.terminate);
     call.addEventListener(CallEvents.Disconnected, VoxEngine.terminate);
-    call.addEventListener(CallEvents.Connected, () =>{
+    call.addEventListener(CallEvents.Connected, () => {
         const request = VoxEngine.enqueueACDRequest("helpers", incCallerId);
         request.addEventListener(ACDEvents.Queued, function (a) {
             request.getStatus();
         });
-      
+        // No operator connected
         request.addEventListener(ACDEvents.Offline, function (a) {
-            call.say("Your call can't be processed right now"); 
+            say("Hallo, wilkommen zu Machbarschaft. Sie werden gleich verbunden.", VOICE_MEN); 
             call.addEventListener(CallEvents.PlaybackFinished, function(b) {
-            VoxEngine.terminate();
+              // if no operators are present, redirect to dialogflow
+              noOperator(incCallerId);
             });
         });
         
-        request.addEventListener(ACDEvents.Waiting, function (a) {
-        
-            
-            call.say(
-         "Hallo, wilkommen zu Machbarschaft. Sie werden gleich verbunden.",
-         {
-          "language": VoiceList.Google.de_DE_Wavenet_A,
-          "ttsOptions": {
-            "pitch": "high",
-            "volume": "loud",
-            "rate": "x-slow"
-          }
-         });
+        request.addEventListener(ACDEvents.Waiting, function (a) {          
+          say("Hallo, wilkommen zu Machbarschaft. Sie werden gleich verbunden.", VOICE_MEN);
         });
+
+        request.addEventListener(ACDEvents.QueueFull, function(a) {
+          say("Momentan sind alle Leitungen belegt. Probieren Sie es spaeter noch einmal");
+          VoxEngine.terminate();
+          request.removeEventListener(ACDEvents);
+        })
 
         call.addEventListener(CallEvents.PlaybackFinished, function (e) {
             call.startPlayback("http://cdn.voximplant.com/toto.mp3");  
@@ -68,14 +64,37 @@ VoxEngine.addEventListener(AppEvents.CallAlerting, (e) => {
             }
         }, timeout_dur);
         })
-})
+});
 
+/**
+ * Say Hello with specific voice
+ * 
+ * @param voice, optional
+ */
+function say(text, voice) {
+  if (!voice) {
+    voice = VOICE_MEN;
+  }
+  call.say(text,
+          {
+            "language": voice,
+            "ttsOptions": {
+              "pitch": "high",
+              "volume": "loud",
+              "rate": "x-slow"
+            }
+          });
+}
+
+/**
+ * No operator connected, redirect to dialogflow
+ */
 function noOperator(callerId){
   if(callerId===""){
-    //hier könnte eine dtmf abfrage passieren
+    say("Bitte teile uns deine Nummer mit unter der wir dich erreichen.");
+    // TODO Abfrage und Interpretation
   }
-dfonCallConnected(callerId);
-
+  dfonCallConnected(callerId);
 }
 
 
